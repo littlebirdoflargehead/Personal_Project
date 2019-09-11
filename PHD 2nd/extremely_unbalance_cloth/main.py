@@ -20,13 +20,13 @@ def train(Config):
     '''
     # step1: 数据
     # 建立大数据集与小数据集，与分别的DataLoader
-    Much_Dataset = Sub_MNIST(root=Config.train_data_root, train=True, sublabel=Config.much_data_label)
-    Few_Dataset = Sub_MNIST(root=Config.train_data_root, train=True, sublabel=Config.few_data_label, numperlabel=40)
-    Much_DataLoader = DataLoader(dataset=Much_Dataset, batch_size=Config.batch_size, shuffle=True, num_workers=0)
-    Few_DataLoader = DataLoader(dataset=Few_Dataset, batch_size=10, shuffle=True, num_workers=0)
+    Good_Dataset = GoodOrBadCloth(root=Config.train_data_root, good=True, train=True)
+    Bad_Dataset = GoodOrBadCloth(root=Config.train_data_root, good=False, train=True)
+    Good_DataLoader = DataLoader(dataset=Good_Dataset, batch_size=Config.batch_size, shuffle=True, num_workers=Config.num_workers)
+    Bad_DataLoader = DataLoader(dataset=Bad_Dataset, batch_size=Config.batch_size, shuffle=True, num_workers=Config.num_workers)
 
     # step2: 定义模型
-    model = getattr(models, Config.model)()
+    model = getattr(models, Config.model)(200)
     if Config.load_model_path:
         model.load(Config.load_model_path)
     if Config.use_gpu:
@@ -39,33 +39,32 @@ def train(Config):
 
     # 训练
     # 训练阶段一，将模型在大数据集上的似然函数提升(或是将Negative Lower Bound降低)，直到模型稳定
-    # ave_loss = np.zeros(Config.max_epoch)
-    # for epoch in range(Config.max_epoch):
-    #
-    #     for i ,(images,_) in enumerate(Much_DataLoader):
-    #         if Config.use_gpu:
-    #             images = images.cuda()
-    #         images = images.view(-1, 28 * 28)
-    #
-    #         optimizer.zero_grad()
-    #         re_images,mu,logvar = model(images)
-    #         loss = torch.sum(VAE_Loss(images,re_images,mu,logvar))
-    #         ave_loss[epoch] = ave_loss[epoch] + loss.item()/len(Much_Dataset)
-    #
-    #         loss.backward()
-    #         optimizer.step()
-    #
-    #
-    #         # if i%Config.print_freq==Config.print_freq-1:
-    #         #     # 当达到指定频率时，显示损失函数并画图
-    #         #     print('Epoch:',epoch+1,'Round:',i+1,'Loss:',loss.item())
-    #         #     ImageVsReImagePlot(images,re_images,Config)
-    #
-    #     GenerativePlot(model, Config,random=True)
-    #     print('Epoch:',epoch+1,'AverageLoss:',ave_loss[epoch])
-    #
-    # save_path = model.save()
-    # print(save_path)
+    ave_loss = np.zeros(Config.max_epoch)
+    for epoch in range(Config.max_epoch):
+
+        for i ,images in enumerate(Good_DataLoader):
+            if Config.use_gpu:
+                images = images.to(Config.device)
+
+            optimizer.zero_grad()
+            re_images,mu,logvar = model(images)
+            loss = torch.sum(VAE_Loss(images,re_images,mu,logvar))
+            ave_loss[epoch] = ave_loss[epoch] + loss.item()/len(Good_Dataset)
+
+            loss.backward()
+            optimizer.step()
+
+
+            # if i%Config.print_freq==Config.print_freq-1:
+            #     # 当达到指定频率时，显示损失函数并画图
+            #     print('Epoch:',epoch+1,'Round:',i+1,'Loss:',loss.item())
+            #     ImageVsReImagePlot(images,re_images,Config)
+
+        GenerativePlot(model, Config,random=True)
+        print('Epoch:',epoch+1,'AverageLoss:',ave_loss[epoch])
+
+    save_path = model.save()
+    print(save_path)
 
     # 训练阶段二，增大模型在大数据集与小数据集上的似然函数的差距
     ave_loss_m = np.zeros(Config.max_epoch)
@@ -75,8 +74,8 @@ def train(Config):
     std_loss_f = np.zeros(Config.max_epoch)
     Config._parse({'load_model_path': None})
     for epoch in range(Config.max_epoch):
-        for i, (images_m, _) in enumerate(Much_DataLoader):
-            for (images_f, label_f) in iter(Few_DataLoader):
+        for i, (images_m, _) in enumerate(Good_DataLoader):
+            for (images_f, label_f) in iter(Bad_DataLoader):
                 # 当前方法是使用两个循环来读取两个不同迭代器中的数据
                 break
             if Config.use_gpu:
@@ -95,11 +94,11 @@ def train(Config):
             loss_dif = torch.mean(loss_m) - torch.mean(loss_f)
 
             # 统计每一个epoch中，两组数据的loss的平均值及loss的标准差值
-            ave_loss_m[epoch] = ave_loss_m[epoch] + torch.sum(loss_m).item() / len(Much_Dataset)
+            ave_loss_m[epoch] = ave_loss_m[epoch] + torch.sum(loss_m).item() / len(Good_Dataset)
             std_loss_m[epoch] = (i * std_loss_m[epoch] + torch.std(loss_m).item()) / (i + 1)
             ave_loss_f[epoch] = (i * ave_loss_f[epoch] + torch.mean(loss_f).item()) / (i + 1)
             std_loss_f[epoch] = (i * std_loss_f[epoch] + torch.std(loss_f).item()) / (i + 1)
-            ave_loss_dif[epoch] = ave_loss_dif[epoch] + loss_dif.item() * images_m.shape[0] / len(Much_Dataset)
+            ave_loss_dif[epoch] = ave_loss_dif[epoch] + loss_dif.item() * images_m.shape[0] / len(Good_Dataset)
 
             Loss = loss_dif + 10 * torch.pow(torch.mean(loss_m) - 64.5, 2) + torch.var(loss_f) + torch.var(loss_m)
             # + 10 * torch.pow(torch.mean(loss_m) - 105.87, 2) + torch.var(loss_f) + torch.var(loss_m)
@@ -205,9 +204,6 @@ def Marginal_Likelihood_Evaluate(model, Config):
     return LikeLihood
 
 
-# Config._parse({'load_model_path':'checkpoints/vae-190806_19:23:26.pth','max_epoch':80}) # 0 6 8/ 1 7
-# Config._parse({'load_model_path':'checkpoints/vae-190812_08:59:25.pth','max_epoch':80}) # 2 3 5/ 1 7 9
-Config._parse({'load_model_path': 'checkpoints/vae-190813_09:18:19.pth', 'max_epoch': 80})  # 1 7/ 0 6 8
 save_path, ave_loss_m, ave_loss_f = train(Config)
 
 # Config._parse({'load_model_path':'checkpoints/vae-190810_18:02:48.pth'})
