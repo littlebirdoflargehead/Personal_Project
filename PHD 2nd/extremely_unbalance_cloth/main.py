@@ -8,7 +8,7 @@ from data import Sub_MNIST,GoodOrBadCloth
 from utils import VAE_Loss, ImageVsReImagePlot, GenerativePlot
 from config import Config
 
-
+net = torchvision.models.vgg19()
 def train(Config):
     '''
     模型训练的整个流程，包括：
@@ -26,14 +26,16 @@ def train(Config):
     Bad_DataLoader = DataLoader(dataset=Bad_Dataset, batch_size=Config.batch_size, shuffle=True, num_workers=Config.num_workers)
 
     # step2: 定义模型
-    model = getattr(models, Config.model)(200)
+    model = getattr(models, Config.model)(100)
+    for name,param in model.named_parameters():
+        print(name,param.shape)
+
     if Config.load_model_path:
         model.load(Config.load_model_path)
     if Config.use_gpu:
         model.to(Config.device)
 
     # step3: 目标函数与优化器
-
     lr = Config.lr
     optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=Config.weight_decay)
 
@@ -47,8 +49,8 @@ def train(Config):
                 images = images.to(Config.device)
 
             optimizer.zero_grad()
-            re_images,mu,logvar = model(images)
-            loss = torch.sum(VAE_Loss(images,re_images,mu,logvar))
+            re_img_mean,re_img_logvar,z_mean,z_logvar = model(images)
+            loss = torch.sum(VAE_Loss(images,re_img_mean,re_img_logvar,z_mean,z_logvar))
             ave_loss[epoch] = ave_loss[epoch] + loss.item()/len(Good_Dataset)
 
             loss.backward()
@@ -67,40 +69,38 @@ def train(Config):
     print(save_path)
 
     # 训练阶段二，增大模型在大数据集与小数据集上的似然函数的差距
-    ave_loss_m = np.zeros(Config.max_epoch)
-    ave_loss_f = np.zeros(Config.max_epoch)
+    ave_loss_g = np.zeros(Config.max_epoch)
+    ave_loss_b = np.zeros(Config.max_epoch)
     ave_loss_dif = np.zeros(Config.max_epoch)
-    std_loss_m = np.zeros(Config.max_epoch)
-    std_loss_f = np.zeros(Config.max_epoch)
+    std_loss_g = np.zeros(Config.max_epoch)
+    std_loss_b = np.zeros(Config.max_epoch)
     Config._parse({'load_model_path': None})
     for epoch in range(Config.max_epoch):
-        for i, (images_m, _) in enumerate(Good_DataLoader):
-            for (images_f, label_f) in iter(Bad_DataLoader):
+        for i, images_g in enumerate(Good_DataLoader):
+            for images_b in iter(Bad_DataLoader):
                 # 当前方法是使用两个循环来读取两个不同迭代器中的数据
                 break
             if Config.use_gpu:
-                images_m = images_m.to(Config.device)
-                images_f = images_f.to(Config.device)
-            images_m = images_m.view(-1, 28 * 28)
-            images_f = images_f.view(-1, 28 * 28)
+                images_g = images_g.to(Config.device)
+                images_b = images_b.to(Config.device)
 
             optimizer.zero_grad()
-            re_images_m, mu_m, logvar_m = model(images_m)
-            loss_m = VAE_Loss(images_m, re_images_m, mu_m, logvar_m)
+            re_images_g, mu_g, logvar_g = model(images_g)
+            loss_g = VAE_Loss(images_g, re_images_g, mu_g, logvar_g)
 
-            re_images_f, mu_f, logvar_f = model(images_f)
-            loss_f = VAE_Loss(images_f, re_images_f, mu_f, logvar_f)
+            re_images_b, mu_b, logvar_b = model(images_b)
+            loss_b = VAE_Loss(images_b, re_images_b, mu_b, logvar_b)
 
-            loss_dif = torch.mean(loss_m) - torch.mean(loss_f)
+            loss_dif = torch.mean(loss_g) - torch.mean(loss_b)
 
             # 统计每一个epoch中，两组数据的loss的平均值及loss的标准差值
-            ave_loss_m[epoch] = ave_loss_m[epoch] + torch.sum(loss_m).item() / len(Good_Dataset)
-            std_loss_m[epoch] = (i * std_loss_m[epoch] + torch.std(loss_m).item()) / (i + 1)
-            ave_loss_f[epoch] = (i * ave_loss_f[epoch] + torch.mean(loss_f).item()) / (i + 1)
-            std_loss_f[epoch] = (i * std_loss_f[epoch] + torch.std(loss_f).item()) / (i + 1)
-            ave_loss_dif[epoch] = ave_loss_dif[epoch] + loss_dif.item() * images_m.shape[0] / len(Good_Dataset)
+            ave_loss_g[epoch] = ave_loss_g[epoch] + torch.sum(loss_g).item() / len(Good_Dataset)
+            std_loss_g[epoch] = (i * std_loss_g[epoch] + torch.std(loss_g).item()) / (i + 1)
+            ave_loss_b[epoch] = (i * ave_loss_b[epoch] + torch.mean(loss_b).item()) / (i + 1)
+            std_loss_b[epoch] = (i * std_loss_b[epoch] + torch.std(loss_b).item()) / (i + 1)
+            ave_loss_dif[epoch] = ave_loss_dif[epoch] + loss_dif.item() * loss_g.shape[0] / len(Good_Dataset)
 
-            Loss = loss_dif + 10 * torch.pow(torch.mean(loss_m) - 64.5, 2) + torch.var(loss_f) + torch.var(loss_m)
+            Loss = loss_dif + 10 * torch.pow(torch.mean(loss_g) - ave_loss[-1], 2) + torch.var(loss_b) + torch.var(loss_g)
             # + 10 * torch.pow(torch.mean(loss_m) - 105.87, 2) + torch.var(loss_f) + torch.var(loss_m)
             # Loss = -torch.pow(loss_dif,2)/(10*torch.var(loss_f)+torch.var(loss_m))+10*torch.pow(torch.mean(loss_m)-105.87,2)
 
@@ -109,15 +109,15 @@ def train(Config):
 
         GenerativePlot(model, Config, random=True)
         print('Epoch:', epoch + 1, 'AverageLossDifference:', ave_loss_dif[epoch],
-              'AverageLoss_MuchDataSet:', ave_loss_m[epoch], 'AverageLoss_FewDataSet:', ave_loss_f[epoch])
+              'AverageLoss_MuchDataSet:', ave_loss_g[epoch], 'AverageLoss_FewDataSet:', ave_loss_b[epoch])
 
         # threshold = (ave_loss_f-ave_loss_m)*std_loss_m/(std_loss_m+std_loss_f)+ave_loss_m
         # print('阈值为：',threshold[epoch])
 
-        for s in range(8):
-            accuracy, confusion_matrix = test(Config, model, 90 + s * 10)
-            print('阈值为:', 90 + s * 10, '正确率为：', accuracy * 100, '%')
-            print(confusion_matrix)
+        # for s in range(8):
+        #     accuracy, confusion_matrix = test(Config, model, 90 + s * 10)
+        #     print('阈值为:', 90 + s * 10, '正确率为：', accuracy * 100, '%')
+        #     print(confusion_matrix)
 
     save_path = model.save()
     print(save_path)
@@ -203,8 +203,8 @@ def Marginal_Likelihood_Evaluate(model, Config):
         LikeLihood = LikeLihood + loss
     return LikeLihood
 
-
+# Config._parse({'load_model_path':'checkpoints/vae-190912_15:16:13.pth'})
 save_path, ave_loss_m, ave_loss_f = train(Config)
 
-# Config._parse({'load_model_path':'checkpoints/vae-190810_18:02:48.pth'})
+# Config._parse({'load_model_path':'checkpoints/vae-190912_14:48:28.pth'})
 # test(Config,threshold=155)

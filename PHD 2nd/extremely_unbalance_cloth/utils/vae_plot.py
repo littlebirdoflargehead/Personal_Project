@@ -7,8 +7,8 @@ def ImageVsReImagePlot(images,re_images,Config):
     '''
     将原图与使用vae重建的图进行对比
     '''
-    images = images[:int(Config.total_images/2)].view(-1, 1, 28, 28)
-    re_images = re_images[:int(Config.total_images/2)].view(-1, 1, 28, 28)
+    images = images[:int(Config.total_images/2)]
+    re_images = re_images[:int(Config.total_images/2)]
     images_concat = torch.cat([images, re_images], dim=3)
     images_concat = torchvision.utils.make_grid(images_concat,nrow=int(Config.image_per_row/2)).permute(1,2,0).detach().cpu()
     plt.imshow(images_concat)
@@ -22,7 +22,7 @@ def GenerativePlot(model,Config,random=True):
     '''
     total_images = Config.total_images*4
     image_per_row = Config.image_per_row*2
-    z_dim = model.fc3.in_features
+    z_dim = model.z_dim
 
     if random:
         z = torch.randn(total_images,z_dim)
@@ -39,7 +39,6 @@ def GenerativePlot(model,Config,random=True):
         z = z.to(Config.device)
 
     generative_images = model.decoder(z)
-    generative_images = generative_images.view(-1, 1, 28, 28)
     generative_images = torchvision.utils.make_grid(generative_images, nrow=image_per_row).permute(1, 2, 0).detach().cpu()
     plt.imshow(generative_images)
     plt.show()

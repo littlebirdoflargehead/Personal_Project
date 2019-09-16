@@ -10,25 +10,23 @@ class DefaultConfig(object):
     env = 'default'
     model = 'VAE'
 
-    much_data_label = [1,7]
-    few_data_label = [0,6,8]
-
     train_data_root = '/home2/liangjw/Documents/DataSet/dilun'
     test_data_root = '/home2/liangjw/Documents/DataSet/dilun'
     load_model_path = None
 
-    batch_size = 128
+    batch_size = 4
     use_gpu = True
-    device = torch.device('cuda:1') if use_gpu else torch.device('cpu')
-    num_workers = 4
-    print_freq = 75 # print info every N batch
+    cuda = 'cuda:1'
+    device = torch.device(cuda) if use_gpu else torch.device('cpu')
+    num_workers = 0
+    print_freq = 30 # print info every N batch
 
     max_epoch = 80
-    lr = 0.001 # initial learning rate
+    lr = 0.002 # initial learning rate
     lr_decay = 0.95 # when val_loss increase, lr = lr*lr_decay
     weight_decay = 1e-4
 
-    image_per_row = int(8)
+    image_per_row = int(1)
     total_images = int(math.pow(image_per_row,2))
 
 
@@ -41,7 +39,7 @@ class DefaultConfig(object):
                 warnings.warn("Warning: opt has not attribut %s" % key)
             setattr(self, key, value)
 
-        self.device = torch.device('cuda') if self.use_gpu else torch.device('cpu')
+        self.device = torch.device(self.cuda) if self.use_gpu else torch.device('cpu')
         self.total_images = int(math.pow(self.image_per_row, 2))
 
         print('user config:')
