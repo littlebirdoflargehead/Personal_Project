@@ -8,7 +8,8 @@ from data import Sub_MNIST,GoodOrBadCloth
 from utils import VAE_Loss, ImageVsReImagePlot, GenerativePlot
 from config import Config
 
-net = torchvision.models.vgg19()
+
+
 def train(Config):
     '''
     模型训练的整个流程，包括：
@@ -26,7 +27,7 @@ def train(Config):
     Bad_DataLoader = DataLoader(dataset=Bad_Dataset, batch_size=Config.batch_size, shuffle=True, num_workers=Config.num_workers)
 
     # step2: 定义模型
-    model = getattr(models, Config.model)(100)
+    model = getattr(models, Config.model)()
     for name,param in model.named_parameters():
         print(name,param.shape)
 
@@ -56,12 +57,12 @@ def train(Config):
             loss.backward()
             optimizer.step()
 
-
             # if i%Config.print_freq==Config.print_freq-1:
             #     # 当达到指定频率时，显示损失函数并画图
             #     print('Epoch:',epoch+1,'Round:',i+1,'Loss:',loss.item())
-            #     ImageVsReImagePlot(images,re_images,Config)
+            #     ImageVsReImagePlot(images,re_img_mean,Config)
 
+        ImageVsReImagePlot(images, re_img_mean, Config)
         GenerativePlot(model, Config,random=True)
         print('Epoch:',epoch+1,'AverageLoss:',ave_loss[epoch])
 
@@ -203,7 +204,7 @@ def Marginal_Likelihood_Evaluate(model, Config):
         LikeLihood = LikeLihood + loss
     return LikeLihood
 
-# Config._parse({'load_model_path':'checkpoints/vae-190912_15:16:13.pth'})
+# Config._parse({'load_model_path':'checkpoints/vae-190917_19:23:53.pth'})  # tensor z / no sigmoid / determined logvar
 save_path, ave_loss_m, ave_loss_f = train(Config)
 
 # Config._parse({'load_model_path':'checkpoints/vae-190912_14:48:28.pth'})

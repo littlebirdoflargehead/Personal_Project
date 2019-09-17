@@ -2,16 +2,11 @@
 # code referd to @famssa in 'https://github.com/pytorch/pytorch/issues/3867'
 # and tensorflow source code
 
-import torch.utils.data
-from torch.nn import functional as F
 
-import math
-import torch
-from torch.nn.parameter import Parameter
+from torch.nn import functional as F
 from torch.nn.functional import pad
-from torch.nn.modules import Module
 from torch.nn.modules.conv import _ConvNd,_ConvTransposeMixin
-from torch.nn.modules.utils import _single, _pair, _triple
+from torch.nn.modules.utils import _pair
 
 
 

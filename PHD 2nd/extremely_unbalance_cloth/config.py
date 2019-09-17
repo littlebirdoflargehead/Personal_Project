@@ -14,7 +14,7 @@ class DefaultConfig(object):
     test_data_root = '/home2/liangjw/Documents/DataSet/dilun'
     load_model_path = None
 
-    batch_size = 4
+    batch_size = 32
     use_gpu = True
     cuda = 'cuda:1'
     device = torch.device(cuda) if use_gpu else torch.device('cpu')
@@ -22,11 +22,11 @@ class DefaultConfig(object):
     print_freq = 30 # print info every N batch
 
     max_epoch = 80
-    lr = 0.002 # initial learning rate
+    lr = 0.001 # initial learning rate
     lr_decay = 0.95 # when val_loss increase, lr = lr*lr_decay
     weight_decay = 1e-4
 
-    image_per_row = int(1)
+    image_per_row = int(2)
     total_images = int(math.pow(image_per_row,2))
 
 

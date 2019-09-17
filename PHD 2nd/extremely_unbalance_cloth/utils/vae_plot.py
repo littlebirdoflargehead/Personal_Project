@@ -25,7 +25,7 @@ def GenerativePlot(model,Config,random=True):
     z_dim = model.z_dim
 
     if random:
-        z = torch.randn(total_images,z_dim)
+        z = torch.randn(total_images,z_dim[0],z_dim[1],z_dim[2])
     else:
         z = torch.randn(1, z_dim)
         z = z.expand(total_images, -1).clone()
@@ -38,7 +38,7 @@ def GenerativePlot(model,Config,random=True):
     if Config.use_gpu:
         z = z.to(Config.device)
 
-    generative_images = model.decoder(z)
+    generative_images,_ = model.decoder(z)
     generative_images = torchvision.utils.make_grid(generative_images, nrow=image_per_row).permute(1, 2, 0).detach().cpu()
     plt.imshow(generative_images)
     plt.show()
