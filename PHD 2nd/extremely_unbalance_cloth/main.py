@@ -205,6 +205,7 @@ def Marginal_Likelihood_Evaluate(model, Config):
     return LikeLihood
 
 # Config._parse({'load_model_path':'checkpoints/vae-190917_19:23:53.pth'})  # tensor z / no sigmoid / determined logvar
+Config._parse({'load_model_path':'checkpoints/vae-190917_20:16:43.pth'})  # tensor z / with sigmoid / determined logvar
 save_path, ave_loss_m, ave_loss_f = train(Config)
 
 # Config._parse({'load_model_path':'checkpoints/vae-190912_14:48:28.pth'})

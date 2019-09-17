@@ -56,7 +56,7 @@ class Generative(BasicModule):
         )
 
     def forward(self, z):
-        mean = self.deconv(z)
+        mean = torch.sigmoid(self.deconv(z))
         logvar = torch.tensor(-4.5).to(z.device)
         return mean, logvar
 
