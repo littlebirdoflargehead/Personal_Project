@@ -92,9 +92,9 @@ class GoodOrBadCloth(data.Dataset):
                 img = [os.path.join(roots, img) for img in os.listdir(roots)]
                 img = sorted(img, key=lambda x: int(x.split('.')[-2].split('(')[-1][:-1]))
                 if train:
-                    img = img[:int(0.7 * len(img))]
+                    img = img[:int(0.3 * len(img))]
                 else:
-                    img = img[int(0.7 * len(img)):]
+                    img = img[int(0.3 * len(img)):]
                 imgs.extend(img)
 
         self.imgs = imgs
