@@ -71,17 +71,24 @@ class GoodOrBadCloth(data.Dataset):
     '''
     数据集中获取好与坏的布
     '''
-    def __init__(self,root,transforms=None,good=True,train=True):
+    def __init__(self,root,transforms=None,good=True,train=True,validation=False):
         '''
         区分好布与坏布并获取文件路径，并排序
-        训练集与测试集的比例为7：3
+        train=True,validation=False为训练集
+        train=True,validation=True为验证集
+        train=False为测试集
+        好布样本集中训练集、验证集、测试集的比例为5：2：3
+        坏布样本集中训练集、验证集、测试集的比例为2：1：7
         '''
         if good:
             root = os.path.join(root, 'good')
             imgs = [os.path.join(root, img) for img in os.listdir(root)]
             imgs = sorted(imgs, key=lambda x: int(x.split('.')[-2].split('/')[-1]))
             if train:
-                imgs = imgs[:int(0.7*len(imgs))]
+                if not validation:
+                    imgs = imgs[:int(0.5 * len(imgs))]
+                else:
+                    imgs = imgs[int(0.5 * len(imgs)):int(0.7 * len(imgs))]
             else:
                 imgs = imgs[int(0.7*len(imgs)):]
         else:
@@ -92,7 +99,10 @@ class GoodOrBadCloth(data.Dataset):
                 img = [os.path.join(roots, img) for img in os.listdir(roots)]
                 img = sorted(img, key=lambda x: int(x.split('.')[-2].split('(')[-1][:-1]))
                 if train:
-                    img = img[:int(0.3 * len(img))]
+                    if not validation:
+                        img = img[:int(0.2 * len(img))]
+                    else:
+                        img = img[int(0.2 * len(img)):int(0.3 * len(img))]
                 else:
                     img = img[int(0.3 * len(img)):]
                 imgs.extend(img)
