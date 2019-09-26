@@ -50,18 +50,19 @@ def GenerativePlot(model, Config, random=True):
     return generative_images
 
 
-def ScatterPlot(elbo, x_index=[], plot=None, marker='x', color='g', save_name=None, show=False):
+def ScatterPlot(elbo, label='', x_index=[], plot=None, marker='x', color='g', save_name=None, show=False):
     '''
     画出elbo1的散点图
     '''
-    if len(x_index)==0:
+    if len(x_index) == 0:
         x_index = torch.range(0, len(elbo))
 
     if not plot:
         plot = plt
 
     elbo = elbo.detach().cpu().numpy()
-    plot.scatter(x=x_index, y=elbo, marker=marker, c=color)
+    plot.scatter(x=x_index, y=elbo, marker=marker, c=color, label=label)
+    plot.legend()
 
     if save_name:
         plot.savefig(save_name)
@@ -109,7 +110,7 @@ Colors = [
 ]
 
 
-def ListScatterPlot(elbolist, marker=Markers, color=Colors, filename=None):
+def ListScatterPlot(elbolist, elbolabel, marker=Markers, color=Colors, filename=None):
     '''
     画出序列散点图
     '''
@@ -122,15 +123,14 @@ def ListScatterPlot(elbolist, marker=Markers, color=Colors, filename=None):
 
     elbo_num = [elbo.size(0) for elbo in elbolist]
     elbo_num.insert(0, 0)
-    elbo_num = torch.cumsum(torch.tensor(elbo_num),dim=0)
+    elbo_num = torch.cumsum(torch.tensor(elbo_num), dim=0)
     index = torch.randperm(elbo_num[-1])
 
     for i in range(len(elbolist)):
         if i == len(elbolist) - 1:
             save_name = filename
             show = True
-        plot = ScatterPlot(elbo=elbolist[i], x_index=index[elbo_num[i]:elbo_num[i + 1]], plot=plot,
-                           marker=marker[i % len(marker)], color=color[i % len(color)],
-                           save_name=save_name, show=show)
+        plot = ScatterPlot(elbo=elbolist[i], label=elbolabel[i], x_index=index[elbo_num[i]:elbo_num[i + 1]], plot=plot,
+                           marker=marker[i % len(marker)], color=color[i % len(color)], save_name=save_name, show=show)
 
     return plot

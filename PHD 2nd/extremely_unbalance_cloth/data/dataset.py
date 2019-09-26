@@ -85,7 +85,9 @@ class GoodOrBadCloth(data.Dataset):
         train=False为测试集
         好布样本集中训练集、验证集、测试集的比例为5：2：3
         坏布样本集中训练集、验证集、测试集的比例为2：1：7
+        labels为0~5，其中0：好布，1~5：不同坏布的类型，Dir记录1~5对应的类别
         '''
+        Dir = []
         if good:
             root = os.path.join(root, 'good')
             imgs = [os.path.join(root, img) for img in os.listdir(root)]
@@ -116,9 +118,11 @@ class GoodOrBadCloth(data.Dataset):
                 label = torch.ones(len(img))*(1+i)
                 labels = torch.cat([labels,label])
                 imgs.extend(img)
+                Dir.append(types)
 
         self.imgs = imgs
-        self.labels = labels
+        self.labels = labels.int()
+        self.Dir = Dir
 
         if not transforms:
             self.transforms = torchvision.transforms.ToTensor()
@@ -127,12 +131,13 @@ class GoodOrBadCloth(data.Dataset):
 
     def __getitem__(self, index):
         '''
-        返回一张图片的数据
+        返回一张图片的数据，及对应的标签
         '''
         img_path = self.imgs[index]
         data = Image.open(img_path)
         data = self.transforms(data)
-        return data
+        label = self.labels[index]
+        return data, label
 
     def __len__(self):
         return len(self.imgs)
