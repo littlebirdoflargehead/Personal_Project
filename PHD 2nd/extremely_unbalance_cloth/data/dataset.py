@@ -65,7 +65,13 @@ class FreyFaces(data.Dataset):
         return self.data.shape[0]
 
 
-
+dir = {
+    'luozhen':[0,15,29,50,67,88,109],
+    'mianjie':[21,31,42,55,72,95,113],
+    'podong':[11,22,35,51,66,86,104,124],
+    'youwu':[15,28,43,51,65,77,94,111],
+    'hengwen':[27,47,72,98,99,106]
+}
 
 class GoodOrBadCloth(data.Dataset):
     '''
@@ -91,10 +97,12 @@ class GoodOrBadCloth(data.Dataset):
                     imgs = imgs[int(0.5 * len(imgs)):int(0.7 * len(imgs))]
             else:
                 imgs = imgs[int(0.7*len(imgs)):]
+            labels = torch.zeros(len(imgs))
         else:
             imgs = []
+            labels = torch.tensor([])
             root = os.path.join(root, 'bad')
-            for types in os.listdir(root):
+            for i, types in enumerate(os.listdir(root)):
                 roots = os.path.join(root,types)
                 img = [os.path.join(roots, img) for img in os.listdir(roots)]
                 img = sorted(img, key=lambda x: int(x.split('.')[-2].split('(')[-1][:-1]))
@@ -105,9 +113,12 @@ class GoodOrBadCloth(data.Dataset):
                         img = img[int(0.2 * len(img)):int(0.3 * len(img))]
                 else:
                     img = img[int(0.3 * len(img)):]
+                label = torch.ones(len(img))*(1+i)
+                labels = torch.cat([labels,label])
                 imgs.extend(img)
 
         self.imgs = imgs
+        self.labels = labels
 
         if not transforms:
             self.transforms = torchvision.transforms.ToTensor()
