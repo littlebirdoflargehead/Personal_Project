@@ -22,7 +22,7 @@ class DefaultConfig(object):
     print_freq = 30 # print info every N batch
 
     max_epoch = 201
-    lr = 0.0005 # initial learning rate
+    lr = 0.0003 # initial learning rate
     lr_decay = 0.95 # when val_loss increase, lr = lr*lr_decay
     weight_decay = 1e-4
 

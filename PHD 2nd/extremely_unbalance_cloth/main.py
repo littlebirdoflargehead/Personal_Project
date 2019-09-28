@@ -5,7 +5,7 @@ from torch.utils.data import DataLoader
 import torchvision
 import torchvision.transforms as transforms
 from data import Sub_MNIST, GoodOrBadCloth
-from utils import VAE_Loss, ImageVsReImagePlot, GenerativePlot, ListScatterPlot
+from utils import VAE_Loss, Z_space_KL_Loss, ImageVsReImagePlot, GenerativePlot, ListScatterPlot
 from config import Config
 
 
@@ -93,8 +93,8 @@ def train(Config):
             re_img_mean_g, re_img_logvar_g, z_mean_g, z_logvar_g = model(images_g)
             loss_g = VAE_Loss(images_g, re_img_mean_g, re_img_logvar_g, z_mean_g, z_logvar_g)
 
-            re_images_b, re_img_logvar_b, z_mean_b, z_logvar_b = model(images_b)
-            loss_b = VAE_Loss(images_b, re_images_b, re_img_logvar_b, z_mean_b, z_logvar_b)
+            re_images_mean_b, re_img_logvar_b, z_mean_b, z_logvar_b = model(images_b)
+            loss_b = VAE_Loss(images_b, re_images_mean_b, re_img_logvar_b, z_mean_b, z_logvar_b)
 
             loss_dif = torch.mean(loss_g) - torch.mean(loss_b)
 
@@ -106,16 +106,24 @@ def train(Config):
                 std_loss_b[epoch] = (i * std_loss_b[epoch] + torch.std(loss_b).item()) / (i + 1)
                 ave_loss_dif[epoch] = ave_loss_dif[epoch] + loss_dif.item() * loss_g.shape[0] / len(Good_Dataset_train)
 
-            # 统计不同类下的loss的方差
+            # 统计不同类下的loss的方差/KL距离
             loss_b_var = 0
+            # Z_b_kl = 0
+            n = 0
             for label in label_b.unique():
                 index = label_b == label
                 if index.sum() > 1:
-                    loss_b_var += torch.var(loss_b[index])/index.sum().detach()
+                    n += 1
+                    loss_b_var += torch.var(loss_b[index])
+                    # KL = Z_space_KL_Loss(z_mean_b[index],z_logvar_b[index],z_mean_b[index],z_logvar_b[index])
+                    # Z_b_kl += KL.sum()/torch.sum(KL>0)
                 else:
                     continue
+            loss_b_var /= n
+            # Z_b_kl /= n
 
-            Loss = loss_dif + 10 * torch.pow(torch.mean(loss_g) - 21296.7370, 2) + loss_b_var + torch.var(loss_g)
+            # Loss = loss_dif + 10 * torch.pow(torch.mean(loss_g) - 18305.4415, 2) + loss_b_var + torch.var(loss_g) + Z_b_kl
+            Loss = loss_dif + 10 * torch.clamp_min(loss_g-21296.7370,0).pow(2).mean() + loss_b_var + torch.var(loss_g)
 
             Loss.backward()
             optimizer.step()
@@ -123,14 +131,13 @@ def train(Config):
         print('Epoch:', epoch + 1, 'AverageLossDifference:', ave_loss_dif[epoch],
               'AverageLoss_GoodDataSet:', ave_loss_g[epoch], 'AverageLoss_BadDataSet:', ave_loss_b[epoch])
 
-        # threshold = (ave_loss_f-ave_loss_m)*std_loss_m/(std_loss_m+std_loss_f)+ave_loss_m
-        # print('阈值为：',threshold[epoch])
-
         if epoch % 10 == 0:
             GenerativePlot(model, Config, random=True)
             threshold = [23000 + s * 2000 for s in range(10)]
-            accuracy_list, confusion_matrix_list, ELBO_LIST = test(Config, model, ValidOrTest='valid',
-                                                                   threshold=threshold, epoch=epoch)
+            accuracy_list, confusion_matrix_list, ELBO_LIST, satisfied = \
+                test(Config, model, ValidOrTest='valid',threshold=threshold, epoch=epoch)
+            if satisfied:
+                test(Config, model, ValidOrTest='test',threshold=threshold, epoch=epoch)
 
     save_path = model.save()
     print(save_path)
@@ -211,33 +218,37 @@ def test(Config, model=None, ValidOrTest='test', threshold=[150], epoch=0):
     confusion_matrix_list = []
     for j in range(len(threshold)):
         confusion_matrix = np.zeros([len(DataLoaders), len(DataLoaders)])
-
-        for dataset_idx in range(len(DataLoaders)):
-            confusion_matrix[dataset_idx, 0] += torch.sum(ELBO_LIST[dataset_idx] < threshold[j])
-            confusion_matrix[dataset_idx, 1] += torch.sum(ELBO_LIST[dataset_idx] >= threshold[j])
+        for i in range(len(ELBO_LIST)):
+            real_index = 0 if i==0 else 1
+            confusion_matrix[real_index, 0] += torch.sum(ELBO_LIST[i] < threshold[j])
+            confusion_matrix[real_index, 1] += torch.sum(ELBO_LIST[i] >= threshold[j])
 
         confusion_matrix_list.append(confusion_matrix)
         accuracy_list.append((confusion_matrix[0, 0] + confusion_matrix[1, 1]) / np.sum(confusion_matrix))
         print('阈值为:', threshold[j], '正确率为：', accuracy_list[j] * 100, '%')
         print(confusion_matrix)
 
-    rate_bad = torch.sum(ELBO_LIST[1] < ELBO_LIST[0].max()).float() / ELBO_LIST[1].size(0)
-    rate_good = torch.sum(ELBO_LIST[0] > ELBO_LIST[1].min()).float() / ELBO_LIST[0].size(0)
+    rate_bad = 0; rate_good=0
+    for i in range(len(ELBO_LIST)-1):
+        rate_bad += torch.sum(ELBO_LIST[i+1] < ELBO_LIST[0].max()).float()/confusion_matrix[1,:].sum()
+        rate_good += torch.sum(ELBO_LIST[0] > ELBO_LIST[i+1].min()).float() / ELBO_LIST[0].size(0)
+
+    satisfied = False
     if rate_bad == 0 and rate_good < 0.01:
-        print('满足要求！！')
-        test(Config, model, ValidOrTest='test',threshold=[(ELBO_LIST[1].min()+ELBO_LIST[0].max())/2.], epoch=epoch)
+        print('满足要求！！');satisfied = True
+        # test(Config, model, ValidOrTest='test',threshold=[(ELBO_LIST[1].min()+ELBO_LIST[0].max())/2.], epoch=epoch)
     print('坏布ELBO浸入率为', rate_bad.item() * 100, '%', '好布ELBO浸入率为', rate_good.item() * 100, '%')
 
-    return accuracy_list, confusion_matrix_list, ELBO_LIST
+    return accuracy_list, confusion_matrix_list, ELBO_LIST, satisfied
 
 
 # Config._parse({'load_model_path': 'checkpoints/vae-190919_15:15:19.pth'})  # tensor z / with sigmoid / determined logvar
 # Config._parse({'load_model_path': 'checkpoints/vae-190919_22:20:59.pth'})  # 训练阶段2 # tensor z / with sigmoid / determined logvar
 # Config._parse({'load_model_path': 'checkpoints/vae-190923_14:54:42.pth'})  # 训练阶段2 # tensor z / with sigmoid / determined logvar
-# Config._parse({'load_model_path': 'checkpoints/vae-190925_13:26:46.pth'})  # 训练阶段1(validation) # tensor z / with sigmoid / determined logvar
+Config._parse({'load_model_path': 'checkpoints/vae-190928_17:19:37.pth'})  # 训练阶段1(validation) # tensor z / with sigmoid / determined logvar
 # Config._parse({'load_model_path': 'checkpoints/vae-190926_13:35:40.pth'})  # 训练阶段2(validation) # tensor z / with sigmoid / determined logvar
-Config._parse({'load_model_path': 'checkpoints/vae-190926_13:35:40.pth'})  # 训练阶段2(validation) # tensor z / with sigmoid / determined logvar / separate types
-save_path, ave_loss_m, ave_loss_f = train(Config)
+# Config._parse({'load_model_path': 'checkpoints/vae-190927_18:35:27.pth'})  # 训练阶段2(validation) # tensor z / with sigmoid / determined logvar / separate types
+train(Config)
 
 # Config._parse({'load_model_path':'checkpoints/vae-190912_14:48:28.pth'})
 # test(Config,threshold=155)
