@@ -5,7 +5,7 @@ from torch.utils.data import DataLoader
 import torchvision
 import torchvision.transforms as transforms
 from data import Sub_MNIST, GoodOrBadCloth
-from utils import VAE_Loss, Z_space_KL_Loss, ImageVsReImagePlot, GenerativePlot, ListScatterPlot
+from utils import VAE_Loss, Z_space_KL_Loss, ImageVsReImagePlot, GenerativePlot, ListScatterPlot, dicwrite_csv
 from config import Config
 
 
@@ -43,34 +43,36 @@ def train(Config):
 
     # 训练
     # 训练阶段一，将模型在大数据集上的似然函数提升(或是将Negative Lower Bound降低)，直到模型稳定
-    # ave_loss = np.zeros(Config.max_epoch)
-    # for epoch in range(Config.max_epoch):
-    #
-    #     for i, (images,_) in enumerate(Good_DataLoader_train):
-    #         if Config.use_gpu:
-    #             images = images.to(Config.device)
-    #
-    #         optimizer.zero_grad()
-    #         re_img_mean, re_img_logvar, z_mean, z_logvar = model(images)
-    #         loss = torch.sum(VAE_Loss(images, re_img_mean, re_img_logvar, z_mean, z_logvar))
-    #         ave_loss[epoch] = ave_loss[epoch] + loss.item() / len(Good_Dataset_train)
-    #
-    #         loss.backward()
-    #         optimizer.step()
-    #
-    #         # if i%Config.print_freq==Config.print_freq-1:
-    #         #     # 当达到指定频率时，显示损失函数并画图
-    #         #     print('Epoch:',epoch+1,'Round:',i+1,'Loss:',loss.item())
-    #         #     ImageVsReImagePlot(images,re_img_mean,Config)
-    #
-    #     print('Epoch:', epoch + 1, 'AverageLoss:', ave_loss[epoch])
-    #
-    #     if epoch % 10 == 0:
-    #         ImageVsReImagePlot(images, re_img_mean, Config)
-    #         GenerativePlot(model, Config, random=True)
-    #
-    # save_path = model.save()
-    # print(save_path)
+    ave_loss = np.zeros(Config.max_epoch)
+    for epoch in range(Config.max_epoch):
+
+        for i, (images,_) in enumerate(Good_DataLoader_train):
+            if Config.use_gpu:
+                images = images.to(Config.device)
+
+            optimizer.zero_grad()
+            re_img_mean, re_img_logvar, z_mean, z_logvar = model(images)
+            loss = torch.sum(VAE_Loss(images, re_img_mean, re_img_logvar, z_mean, z_logvar))
+            ave_loss[epoch] = ave_loss[epoch] + loss.item() / len(Good_Dataset_train)
+
+            loss.backward()
+            optimizer.step()
+
+            # if i%Config.print_freq==Config.print_freq-1:
+            #     # 当达到指定频率时，显示损失函数并画图
+            #     print('Epoch:',epoch+1,'Round:',i+1,'Loss:',loss.item())
+            #     ImageVsReImagePlot(images,re_img_mean,Config)
+
+        print('Epoch:', epoch + 1, 'AverageLoss:', ave_loss[epoch])
+
+        if epoch % 10 == 0:
+            ImageVsReImagePlot(images, re_img_mean, Config)
+            GenerativePlot(model, Config, random=True)
+
+    save_path = model.save()
+    print(save_path)
+    dic = {'Average_Loss': ave_loss}
+    dicwrite_csv(Config.csv_path, ['Average_Loss'], dic, sub_name='step1')
 
 
     # 训练阶段二，增大模型在大数据集与小数据集上的似然函数的差距

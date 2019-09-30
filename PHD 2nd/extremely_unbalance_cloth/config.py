@@ -14,6 +14,8 @@ class DefaultConfig(object):
     test_data_root = '/home2/liangjw/Documents/DataSet/dilun'
     load_model_path = None
 
+    csv_path = 'validation.csv'
+
     batch_size = 32
     use_gpu = True
     cuda = 'cuda:1'
