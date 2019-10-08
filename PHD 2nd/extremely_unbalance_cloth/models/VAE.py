@@ -48,10 +48,10 @@ class Generative(BasicModule):
         self.model_name = 'generative'
 
         self.deconv = nn.Sequential(
-            ConvTranspose2d_same(128, 64, 3, 2), nn.ReLU(),
-            ConvTranspose2d_same(64, 32, 3, 2), nn.ReLU(),
-            ConvTranspose2d_same(32, 16, 3, 2), nn.ReLU(),
-            ConvTranspose2d_same(16, 8, 5, 2), nn.ReLU(),
+            ConvTranspose2d_same(128, 64, 3, 2), nn.BatchNorm2d(64),nn.ReLU(),
+            ConvTranspose2d_same(64, 32, 3, 2), nn.BatchNorm2d(32),nn.ReLU(),
+            ConvTranspose2d_same(32, 16, 3, 2), nn.BatchNorm2d(16),nn.ReLU(),
+            ConvTranspose2d_same(16, 8, 5, 2), nn.BatchNorm2d(8),nn.ReLU(),
             ConvTranspose2d_same(8, 1, 7, 2)
         )
 
@@ -69,18 +69,18 @@ class Inference(BasicModule):
         self.model_name = 'inference'
 
         self.feature = nn.Sequential(
-            Conv2d_same(1, 8, 3, 1), nn.ReLU(),nn.BatchNorm2d(8),
-            Conv2d_same(8, 8, 3, 1), nn.ReLU(),nn.BatchNorm2d(8),
-            Conv2d_same(8, 8, 3, 2), nn.ReLU(),nn.BatchNorm2d(8),
-            Conv2d_same(8, 16, 3, 1), nn.ReLU(),nn.BatchNorm2d(16),
-            Conv2d_same(16, 16, 3, 1), nn.ReLU(),nn.BatchNorm2d(16),
-            Conv2d_same(16, 16, 3, 2), nn.ReLU(),nn.BatchNorm2d(16),
-            Conv2d_same(16, 32, 3, 1), nn.ReLU(),nn.BatchNorm2d(32),
-            Conv2d_same(32, 32, 3, 1), nn.ReLU(),nn.BatchNorm2d(32),
-            Conv2d_same(32, 32, 3, 2), nn.ReLU(),nn.BatchNorm2d(32),
-            Conv2d_same(32, 64, 3, 1), nn.ReLU(),nn.BatchNorm2d(64),
-            Conv2d_same(64, 64, 3, 1), nn.ReLU(),nn.BatchNorm2d(64),
-            Conv2d_same(64, 64, 3, 2), nn.ReLU(),nn.BatchNorm2d(64),
+            Conv2d_same(1, 8, 3, 1), nn.BatchNorm2d(8),nn.ReLU(),
+            Conv2d_same(8, 8, 3, 1), nn.BatchNorm2d(8),nn.ReLU(),
+            Conv2d_same(8, 8, 3, 2), nn.BatchNorm2d(8),nn.ReLU(),
+            Conv2d_same(8, 16, 3, 1), nn.BatchNorm2d(16),nn.ReLU(),
+            Conv2d_same(16, 16, 3, 1), nn.BatchNorm2d(16),nn.ReLU(),
+            Conv2d_same(16, 16, 3, 2), nn.BatchNorm2d(16),nn.ReLU(),
+            Conv2d_same(16, 32, 3, 1), nn.BatchNorm2d(32),nn.ReLU(),
+            Conv2d_same(32, 32, 3, 1), nn.BatchNorm2d(32),nn.ReLU(),
+            Conv2d_same(32, 32, 3, 2), nn.BatchNorm2d(32),nn.ReLU(),
+            Conv2d_same(32, 64, 3, 1), nn.BatchNorm2d(64),nn.ReLU(),
+            Conv2d_same(64, 64, 3, 1), nn.BatchNorm2d(64),nn.ReLU(),
+            Conv2d_same(64, 64, 3, 2), nn.BatchNorm2d(64),nn.ReLU(),
         )
         self.mean_layer = Conv2d_same(64,128,3,2)
         self.logvariance_layer = Conv2d_same(64,128,3,2)

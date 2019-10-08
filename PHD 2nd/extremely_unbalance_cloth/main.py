@@ -5,7 +5,8 @@ from torch.utils.data import DataLoader
 import torchvision
 import torchvision.transforms as transforms
 from data import Sub_MNIST, GoodOrBadCloth
-from utils import VAE_Loss, Z_space_KL_Loss, ImageVsReImagePlot, GenerativePlot, ListScatterPlot, dicwrite_csv
+from utils import VAE_Loss, Z_space_KL_Loss, ImageVsReImagePlot, GenerativePlot, ListScatterPlot, \
+    dic_write_csv, make_threshold_titles
 from config import Config
 
 
@@ -44,13 +45,23 @@ def train(Config):
     # 训练
     # 训练阶段一，将模型在大数据集上的似然函数提升(或是将Negative Lower Bound降低)，直到模型稳定
     ave_loss = np.zeros(Config.max_epoch)
+    learning_rate = np.zeros(Config.max_epoch)
     for epoch in range(Config.max_epoch):
+
+        if epoch>=5 and ave_loss[epoch-1]==ave_loss[epoch-5:epoch-1].max():
+            # 当损失函数不下降时，降低学习率
+            lr *= Config.lr_decay
+            print('Epoch:',epoch+1,'Learning Rate:',lr)
+            for param_group in optimizer.param_groups:
+                param_group['lr'] = lr
 
         for i, (images,_) in enumerate(Good_DataLoader_train):
             if Config.use_gpu:
                 images = images.to(Config.device)
 
+            model.train()
             optimizer.zero_grad()
+
             re_img_mean, re_img_logvar, z_mean, z_logvar = model(images)
             loss = torch.sum(VAE_Loss(images, re_img_mean, re_img_logvar, z_mean, z_logvar))
             ave_loss[epoch] = ave_loss[epoch] + loss.item() / len(Good_Dataset_train)
@@ -63,16 +74,22 @@ def train(Config):
             #     print('Epoch:',epoch+1,'Round:',i+1,'Loss:',loss.item())
             #     ImageVsReImagePlot(images,re_img_mean,Config)
 
+        learning_rate[epoch] = optimizer.state_dict()['param_groups'][0]['lr']
         print('Epoch:', epoch + 1, 'AverageLoss:', ave_loss[epoch])
 
-        if epoch % 10 == 0:
-            ImageVsReImagePlot(images, re_img_mean, Config)
-            GenerativePlot(model, Config, random=True)
+        # if epoch % 10 == 0:
+        #     ImageVsReImagePlot(images, re_img_mean, Config)
+        #     GenerativePlot(model, Config, random=True)
+
+        if epoch % 100 == 99:
+            save_path = model.save()
+            print('Epoch:',epoch+1,'Save Path:',save_path)
 
     save_path = model.save()
     print(save_path)
-    dic = {'Average_Loss': ave_loss}
-    dicwrite_csv(Config.csv_path, ['Average_Loss'], dic, sub_name='step1')
+    torch.save(optimizer.state_dict(), 'checkpoints/optimizer.pth')
+    dic = {'Average_Loss': ave_loss, 'Learning_Rate': learning_rate}
+    dic_write_csv(Config.csv_path, ['Average_Loss', 'Learning_Rate'], dic, sub_name='step1')
 
 
     # 训练阶段二，增大模型在大数据集与小数据集上的似然函数的差距
@@ -81,6 +98,20 @@ def train(Config):
     ave_loss_dif = np.zeros(Config.max_epoch)
     std_loss_g = np.zeros(Config.max_epoch)
     std_loss_b = np.zeros(Config.max_epoch)
+    learning_rate = np.zeros(Config.max_epoch)
+    Titles = ['Average_Loss_Good', 'Average_Loss_Bad', 'Average_Loss_Difference', 'Learning_Rate']
+    dic = {'Average_Loss_Good': ave_loss_g, 'Average_Loss_Bad': ave_loss_b,
+           'Average_Loss_Difference': ave_loss_dif, 'Learning_Rate': learning_rate}
+
+    threshold = [20000 + s * 2500 for s in range(8)]
+    good_error = np.zeros([Config.max_epoch, 8])
+    bad_error = np.zeros([Config.max_epoch, 8])
+    titles = make_threshold_titles(threshold, ['Good_Error', 'Bad_Error'])
+    for i in range(len(threshold)):
+        dic.update({titles[i * 2]: good_error[:, i]})
+        dic.update({titles[i * 2 + 1]: bad_error[:, i]})
+    Titles += titles
+
     Config._parse({'load_model_path': None})
     for epoch in range(Config.max_epoch):
         for i, (images_g,_) in enumerate(Good_DataLoader_train):
@@ -91,7 +122,9 @@ def train(Config):
                 images_g = images_g.to(Config.device)
                 images_b = images_b.to(Config.device)
 
+            model.train()
             optimizer.zero_grad()
+
             re_img_mean_g, re_img_logvar_g, z_mean_g, z_logvar_g = model(images_g)
             loss_g = VAE_Loss(images_g, re_img_mean_g, re_img_logvar_g, z_mean_g, z_logvar_g)
 
@@ -126,10 +159,14 @@ def train(Config):
 
             # Loss = loss_dif + 10 * torch.pow(torch.mean(loss_g) - 18305.4415, 2) + loss_b_var + torch.var(loss_g) + Z_b_kl
             Loss = loss_dif + 10 * torch.clamp_min(loss_g-21296.7370,0).pow(2).mean() + loss_b_var + torch.var(loss_g)
+            # Loss = loss_dif + 10 * (loss_g-18643.3279).clamp_min(0).mean().pow(2) + torch.var(loss_b) + torch.var(loss_g)  # loss1
+            # (loss_g.mean() - 18643.3279).pow(2)  # loss2
+            # loss_g[:5].sum() - loss_b[:5].sum()  # loss4
 
             Loss.backward()
             optimizer.step()
 
+        learning_rate[epoch] = optimizer.state_dict()['param_groups'][0]['lr']
         print('Epoch:', epoch + 1, 'AverageLossDifference:', ave_loss_dif[epoch],
               'AverageLoss_GoodDataSet:', ave_loss_g[epoch], 'AverageLoss_BadDataSet:', ave_loss_b[epoch])
 
@@ -143,6 +180,8 @@ def train(Config):
 
     save_path = model.save()
     print(save_path)
+    torch.save(optimizer.state_dict(), 'checkpoints/optimizer_step2.pth')
+    dic_write_csv(Config.csv_path, Titles, dic, sub_name='step2')
     return save_path, ave_loss_g, ave_loss_b
 
 

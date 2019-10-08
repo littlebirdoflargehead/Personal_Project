@@ -17,15 +17,18 @@ def write_csv(filename, header, data, sub_name=''):
     else:
         filename = filename + '_' + sub_name + '.csv'
 
+    if type(data) is np.ndarray:
+        data = torch.from_numpy(data)
+
     with open(filename, 'w') as f:
         writer = csv.writer(f)
-        header.insert(0, 'epoch')
+        header.insert(0, 'Epoch')
         writer.writerow(header)
-        epoch = torch.range(1, data.size(0)).view(data.size(0), 1)
-        writer.writerows(torch.cat([epoch, data], dim=1).numpy())
+        epoch = torch.arange(0, data.size(0)).float().view(data.size(0), 1) + 1
+        writer.writerows(torch.cat([epoch, data.float()], dim=1).numpy())
 
 
-def dicwrite_csv(filename, header, dic, sub_name=''):
+def dic_write_csv(filename, header, dic, sub_name=''):
     '''
     将字典数据接入csv中
     :param filename: csv文件名
@@ -42,10 +45,26 @@ def dicwrite_csv(filename, header, dic, sub_name=''):
 
     with open(filename, 'w') as f:
         writer = csv.writer(f)
-        n = dic[header[0]].numel()
-        data = torch.range(1, n).view(n, 1)
+        n = dic[header[0]].shape[0]
+        data = torch.arange(0, n).float().view(n, 1) + 1
         for i in range(len(header)):
-            data = torch.cat([data, dic[header[i]].view(n, 1)], dim=1)
-        header.insert(0, 'epoch')
+            if type(dic[header[i]]) is np.ndarray:
+                dic[header[i]] = torch.from_numpy(dic[header[i]])
+            data = torch.cat([data, dic[header[i]].float().view(n, 1)], dim=1)
+        header.insert(0, 'Epoch')
         writer.writerow(header)
         writer.writerows(data.numpy())
+
+
+def make_threshold_titles(threshold,titles):
+    '''
+    根据阈值以及标题生成卷积后的标题
+    :param threshold: 阈值
+    :param titles: 各种标题
+    :return: 最终生成的卷积标题列表
+    '''
+    Titles = []
+    for i in range(len(threshold)):
+        for j in range(len(titles)):
+            Titles.append(titles[j]+'_{}'.format(threshold[i]))
+    return Titles
