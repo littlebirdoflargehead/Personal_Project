@@ -29,12 +29,15 @@ def normalize(mx):
     return mx
 
 
-def gain_to_sparse(gain, percentage=95, normal=True):
-    """
+def gain_to_sparse(gain, percentage=95, normal=False, istorch=True):
+    '''
     Generate sparse Adjacency Matrix from the Gain Matrix according to the coefficients
     :param gain: Gain(Lead Field) Matrix
+    :param percentage:
+    :param normal:
+    :param istorch: return torch tensor or scipy sparse coo_matrix
     :return:
-    """
+    '''
     if percentage < 1.:
         percentage *= 100
 
@@ -44,8 +47,10 @@ def gain_to_sparse(gain, percentage=95, normal=True):
     g_abs = np.abs(gain)
     index = np.argwhere(g_abs > np.percentile(g_abs, q=percentage, axis=1).reshape(-1, 1))
 
-    indices = torch.from_numpy(index.T)
-    values = torch.ones(indices.shape[1])
-    shape = torch.Size(gain.shape)
-
-    return torch.sparse.FloatTensor(indices, values, shape)
+    if istorch:
+        indices = torch.from_numpy(index.T)
+        values = torch.ones(indices.shape[1])
+        shape = torch.Size(gain.shape)
+        return torch.sparse.FloatTensor(indices, values, shape)
+    else:
+        return sp.coo_matrix((np.ones(index.shape[0]), (index[:, 0], index[:, 1])), shape=gain.shape)
