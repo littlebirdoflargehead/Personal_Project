@@ -102,13 +102,15 @@ def tbf_svd(signal, k=None):
         s_pow = np.power(s, 2)
         index = np.argwhere((s_pow / np.sum(s_pow)) > (1 / nSensor)).reshape(-1)
         TBFs = vh[index, :]
+        TBFs_svd = s[index]
     else:
         TBFs = vh[0:int(k), :]
+        TBFs_svd = s[0:int(k)]
 
-    return TBFs
+    return TBFs, TBFs_svd
 
 
-def simulated_signal_generator(nPatches=1, extent=6e-4, nTBFs=5, basic=None,
+def simulated_signal_generator(nPatches=1, extent=6e-4, nTBFs=5, basic=None, 
                                stim=251, snr=5, gain=None, cortex=None):
     '''
     Generate simulated M/EEG signal with white gaussian noise
@@ -123,7 +125,7 @@ def simulated_signal_generator(nPatches=1, extent=6e-4, nTBFs=5, basic=None,
     :return:
     '''
     if basic is None:
-        raise Warning('lacked of Basic Signal for simulate signal generation')
+        print('lacked of Basic Signal for simulate signal generation')
         basic, stim = basic_signal()
     if cortex is None or gain is None:
         raise ValueError('lacked of Cortex struture and Gain matrix')
@@ -139,7 +141,7 @@ def simulated_signal_generator(nPatches=1, extent=6e-4, nTBFs=5, basic=None,
     s_real = simulated_source(nSource, Patch, basic)
 
     # add white gaussian noise to the measure signal and normalize
-    B = awgn(np.matmul(gain, s_real), snr=-5)
+    B = awgn(np.matmul(gain, s_real), snr=snr)
     ratio = np.max(np.abs(B))
     B = B / ratio
 
@@ -149,6 +151,6 @@ def simulated_signal_generator(nPatches=1, extent=6e-4, nTBFs=5, basic=None,
     B = np.matmul(W, B)
 
     # extract TBFs from the measure signal with SVD
-    TBFs = tbf_svd(B, nTBFs)
-
-    return ActiveVox, s_real, ratio, B, L, W, TBFs
+    TBFs, TBFs_svd = tbf_svd(B, nTBFs)
+    
+    return ActiveVox, s_real, ratio, B, L, W, TBFs, TBFs_svd

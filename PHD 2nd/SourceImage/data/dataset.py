@@ -23,8 +23,9 @@ def simulated_signal_loader(path=None):
     W_array = Data['W_array']
     W_singular_array = Data['W_singular_array']
     TBFs_array = Data['TBFs_array']
+    TBFs_svd_array = Data['TBFs_svd_array']
 
-    return ActiveVox_List, s_real_List, ratio_array, B_array, W_array, W_singular_array, TBFs_array
+    return ActiveVox_List, s_real_List, ratio_array, B_array, W_array, W_singular_array, TBFs_array, TBFs_svd_array
 
 
 class simulated_signal_dataset(object):
@@ -59,7 +60,8 @@ class simulated_signal_dataset(object):
                        'B_array': np.empty([0, 0, 0]),
                        'W_array': np.empty([0, 0, 0]),
                        'W_singular_array': np.empty([0]),
-                       'TBFs_array': np.empty([0, 0, 0])}
+                       'TBFs_array': np.empty([0, 0, 0]),
+                       'TBFs_svd_array': np.empty([0, 0])}
 
     def dir_filter(self, dir_list=[], filters=[]):
         '''
@@ -80,56 +82,6 @@ class simulated_signal_dataset(object):
 
         return data_files
 
-    def batch_generator_old(self, batch_size=128, multi_files=True, nfiles=5):
-        '''
-        Generate batch samples for training or testing in numpy format (old version)
-        :param batch_size: number of samples in one batch
-        :param multi_files: generate samples from multiple files or not
-        :param nfiles: number of multiple files to load if multi_files is True
-        :return:
-        '''
-        if multi_files:
-            npath = np.min([len(self.data_files), nfiles])
-            each_file_size = math.ceil(batch_size / npath)
-            # 随机从多个(最多5个)data文件中提取数据
-            file_index = np.random.permutation(len(self.data_files))[0:npath]
-            for i in range(npath):
-                ActiveVox_List_temp, s_real_List_temp, ratio_array_temp, B_array_temp, W_array_temp, \
-                W_singular_array_temp, TBFs_array_temp = simulated_signal_loader(self.data_files[file_index[i]])
-                if i == 0:
-                    ndata = batch_size - each_file_size * (npath - 1)
-                    ActiveVox_List = []
-                    s_real_List = []
-                    ratio_array = np.empty(batch_size)
-                    B_array = np.empty([batch_size, B_array_temp.shape[1], B_array_temp.shape[2]])
-                    W_array = np.empty([batch_size, W_array_temp.shape[1], W_array_temp.shape[2]])
-                    TBFs_array = np.empty([batch_size, TBFs_array_temp.shape[1], TBFs_array_temp.shape[2]])
-                else:
-                    ndata += each_file_size
-                # 从data文件中随机抽取each_file_size个数的数据
-                data_index = np.random.permutation(len(ActiveVox_List_temp))[0:ndata]
-                ActiveVox_List += [ActiveVox_List_temp[i] for i in data_index]
-                s_real_List += [s_real_List_temp[i] for i in data_index]
-                ratio_array[ndata - len(data_index):ndata] = ratio_array_temp[data_index]
-                B_array[ndata - len(data_index):ndata, :, :] = B_array_temp[data_index, :, :]
-                W_array[ndata - len(data_index):ndata, :, :] = W_array_temp[data_index, :, :]
-                TBFs_array[ndata - len(data_index):ndata, :, :] = TBFs_array_temp[data_index, :, :]
-        else:
-            # 随机选取1个data文件提取数据
-            file_index = np.random.permutation(len(self.data_files))[0]
-            ActiveVox_List, s_real_List, ratio_array, B_array, W_array, W_singular_array, TBFs_array \
-                = simulated_signal_loader(self.data_files[file_index])
-            # 从data文件中随机抽取batch个数的数据
-            data_index = np.random.permutation(len(ActiveVox_List))[0:batch_size]
-            ActiveVox_List = [ActiveVox_List[i] for i in data_index]
-            s_real_List = [s_real_List[i] for i in data_index]
-            ratio_array = ratio_array[data_index]
-            B_array = B_array[data_index, :, :]
-            W_array = W_array[data_index, :, :]
-            TBFs_array = TBFs_array[data_index, :, :]
-
-        return ActiveVox_List, s_real_List, ratio_array, B_array, W_array, TBFs_array
-
     def batch_generator_torch(self, batch_size=128, multi_files=False, nfiles=5):
         '''
         Generate batch samples for training or testing in torch format
@@ -138,15 +90,15 @@ class simulated_signal_dataset(object):
         :param nfiles: number of multiple files to load if multi_files is True
         :return:
         '''
-        ActiveVox_List, s_real_List, ratio_array, B_array, W_array, W_singular_array, TBFs_array \
+        ActiveVox_List, s_real_List, ratio_array, B_array, W_array, W_singular_array, TBFs_array, TBFs_svd_array \
             = self.batch_generator(batch_size, nfiles)
 
-        ratio_tensor, B_tensor, W_tensor, W_singular_tensor, TBFs_tensor = \
-            self.np_to_torch(ratio_array, B_array, W_array, W_singular_array, TBFs_array)
+        ratio_tensor, B_tensor, W_tensor, W_singular_tensor, TBFs_tensor, TBFs_svd_tensor = \
+            self.np_to_torch(ratio_array, B_array, W_array, W_singular_array, TBFs_array, TBFs_svd_array)
 
         L_tensor = torch.matmul(W_tensor, self.gain)
 
-        return ActiveVox_List, s_real_List, ratio_tensor, B_tensor, L_tensor, W_singular_tensor, TBFs_tensor
+        return ActiveVox_List, s_real_List, ratio_tensor, B_tensor, L_tensor, W_singular_tensor, TBFs_tensor, TBFs_svd_tensor
 
     def np_to_torch(self, *args):
         '''
@@ -157,6 +109,17 @@ class simulated_signal_dataset(object):
         out = []
         for n in range(len(args)):
             out.append(torch.from_numpy(args[n].astype(np.float32)).to(self.device))
+        return out
+
+    def torch_to_np(self, *args):
+        '''
+        Translate torch tensor to numpy array
+        :param args: tensor needed to be translated
+        :return:
+        '''
+        out = []
+        for n in range(len(args)):
+            out.append(args[n].detach().cpu().numpy().astype(np.float64))
         return out
 
     def batch_generator(self, batch_size=128, nfiles=2):
@@ -190,12 +153,13 @@ class simulated_signal_dataset(object):
         ActiveVox_List = [self.buffer['ActiveVox_List'][i] for i in data_index]
         s_real_List = [self.buffer['s_real_List'][i] for i in data_index]
         ratio_array = self.buffer['ratio_array'][data_index]
-        B_array = self.buffer['B_array'][data_index, :, :]
-        W_array = self.buffer['W_array'][data_index, :, :]
+        B_array = self.buffer['B_array'][data_index]
+        W_array = self.buffer['W_array'][data_index]
         W_singular_array = self.buffer['W_singular_array'][data_index]
-        TBFs_array = self.buffer['TBFs_array'][data_index, :, :]
+        TBFs_array = self.buffer['TBFs_array'][data_index]
+        TBFs_svd_array = self.buffer['TBFs_svd_array'][data_index]
 
-        return ActiveVox_List, s_real_List, ratio_array, B_array, W_array, W_singular_array, TBFs_array
+        return ActiveVox_List, s_real_List, ratio_array, B_array, W_array, W_singular_array, TBFs_array, TBFs_svd_array
 
     def buffer_update(self, nfiles):
         '''
@@ -219,11 +183,12 @@ class simulated_signal_dataset(object):
         self.buffer['W_array'] = self.buffer['W_array'][self.buffer_id:self.nbuffer]
         self.buffer['W_singular_array'] = self.buffer['W_singular_array'][self.buffer_id:self.nbuffer]
         self.buffer['TBFs_array'] = self.buffer['TBFs_array'][self.buffer_id:self.nbuffer]
+        self.buffer['TBFs_svd_array'] = self.buffer['TBFs_svd_array'][self.buffer_id:self.nbuffer]
         self.nbuffer -= self.buffer_id
 
         # 从未载入到buffer中的数据文件中随机抽取一定数目的数据文件进行加载
         for i in range(len(file_index)):
-            ActiveVox_List, s_real_List, ratio_array, B_array, W_array, W_singular_array, TBFs_array \
+            ActiveVox_List, s_real_List, ratio_array, B_array, W_array, W_singular_array, TBFs_array, TBFs_svd_array \
                 = simulated_signal_loader(unread_files[file_index[i]])
             self.buffer['ActiveVox_List'] += ActiveVox_List
             self.buffer['s_real_List'] += s_real_List
@@ -234,10 +199,12 @@ class simulated_signal_dataset(object):
                 self.buffer['B_array'] = B_array
                 self.buffer['W_array'] = W_array
                 self.buffer['TBFs_array'] = TBFs_array
+                self.buffer['TBFs_svd_array'] = TBFs_svd_array
             else:
                 self.buffer['B_array'] = np.concatenate((self.buffer['B_array'], B_array), axis=0)
                 self.buffer['W_array'] = np.concatenate((self.buffer['W_array'], W_array), axis=0)
                 self.buffer['TBFs_array'] = np.concatenate((self.buffer['TBFs_array'], TBFs_array), axis=0)
+                self.buffer['TBFs_svd_array'] = np.concatenate((self.buffer['TBFs_svd_array'], TBFs_svd_array), axis=0)
             self.read_files.append(unread_files[file_index[i]])
 
         # 确定随机序列buffer_order，并初始化该序列的指针为0

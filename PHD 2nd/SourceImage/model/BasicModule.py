@@ -23,8 +23,8 @@ class BasicModule(nn.Module):
         torch.save(self.state_dict(), name)
         return name
 
-    def load(self, path):
+    def load(self, path, map_location=None):
         '''
         从文件路径中读取模型的称呼
         '''
-        self.load_state_dict(torch.load(path))
+        self.load_state_dict(torch.load(path, map_location=map_location))

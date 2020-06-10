@@ -1,4 +1,5 @@
 import numpy as np
+import scipy.sparse as sp
 from scipy.sparse import coo_matrix
 
 
@@ -98,3 +99,26 @@ def active_vox_generator(seedvox, AreaDef, Cortex):
     Area = np.sum(VertArea[ActiveVox])
 
     return Patch, ActiveVox, Area
+
+
+def variation_edge(vertconn):
+    '''
+    generate the sparse matrix of the variation matrix
+    :param vertconn:
+    :return:
+    '''
+    nSource = vertconn.shape[0]
+    row = np.empty([0], dtype=np.int)
+    col = np.empty([0], dtype=np.int)
+    indices = np.empty([0], dtype=np.int)
+    for i in range(nSource):
+        col_1, col_2, _ = sp.find(vertconn[i, :] != 0)
+        idx = np.where(col_2 < i)[0]
+        col_1 = col_1[idx] + i
+        col_2 = col_2[idx]
+        row_temp = (np.arange(0, idx.shape[0]) + row.shape[0] / 2).astype(np.int)
+        row = np.hstack([row, row_temp, row_temp])
+        col = np.hstack([col, col_1, col_2])
+        indices = np.hstack([indices, np.full(idx.shape[0], 1), np.full(idx.shape[0], -1)])
+
+    return coo_matrix((indices, (row, col)))
