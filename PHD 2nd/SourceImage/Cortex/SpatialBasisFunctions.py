@@ -20,7 +20,7 @@ def spatial_prior(vertconn, rho=0.6):
     return W
 
 
-def SpatialBasisFunctions(vertconn, clusters):
+def spatial_basis_functions(vertconn, clusters):
     W = spatial_prior(vertconn)
 
     for i in range(len(clusters)):

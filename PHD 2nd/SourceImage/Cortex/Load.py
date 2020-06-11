@@ -4,7 +4,7 @@ import pickle
 import scipy.sparse as sparse
 
 from utils import tess_area
-from .SpatialBasisFunctions import patch_expand, SpatialBasisFunctions
+from .SpatialBasisFunctions import patch_expand, spatial_basis_functions
 
 
 def cortex_loader(path='Cortex_6003'):
