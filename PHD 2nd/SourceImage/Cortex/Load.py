@@ -2,9 +2,9 @@ from scipy.io import loadmat
 import os
 import pickle
 import scipy.sparse as sparse
+import numpy as np
 
-from utils import tess_area
-from .SpatialBasisFunctions import patch_expand, spatial_basis_functions
+from utils import tess_area, create_clusters
 
 
 def cortex_loader(path='Cortex_6003'):
@@ -42,16 +42,24 @@ def cortex_loader(path='Cortex_6003'):
         # calculate the neighborhood of the vertices in 10 steps
         VertConn = Cortex['VertConn'].copy()
         VertConn = sparse.eye(VertConn.shape[0], VertConn.shape[1]) + VertConn
-        Neighborhood = VertConn
-        for _ in range(9):
-            Neighborhood = Neighborhood.dot(VertConn)
-        Cortex['Neighborhood'] = Neighborhood
+        Cortex['Neighborhood'] = []
+        Cortex['Neighborhood'].append(VertConn)
+        for i in range(9):
+            Cortex['Neighborhood'].append(Cortex['Neighborhood'][i].dot(VertConn))
 
         # evaluate the basic clusters of the cortex and the corresponding spatial basis functions
-        clusters, seeds, scales = patch_expand(VertConn, [3, 4, 5])
+        score = np.random.rand(VertConn.shape[0])
+        scales = [3, 4, 5, 6]
+        seeds = []
+        clusters = []
+        for i in range(len(scales)):
+            seed_, _, cluster_ = create_clusters(Cortex, score, scales[i])
+            seeds.append(np.array(seed_))
+            clusters.append(cluster_)
+        # clusters, seeds, scales = patch_expand(VertConn, [3, 4, 5])
         Cortex['Clusters'] = clusters
         Cortex['Seeds'] = seeds
-        Cortex['Scales'] = scales
+        Cortex['Scales'] = np.array(scales)
         # Cortex['SBFs'] = []
         # for i in range(len(scales)):
         #     Cortex['SBFs'].append(SpatialBasisFunctions(VertConn, clusters[i]))

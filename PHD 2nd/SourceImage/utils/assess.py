@@ -46,7 +46,7 @@ def unbiased_auc(source_sim, source_est, Cortex, act_ind=None):
     :return:
     '''
     # 从Cortex字典中读取neighborhood稀疏矩阵，默认10阶邻接矩阵
-    neighborhood = Cortex['Neighborhood']
+    neighborhood = Cortex['Neighborhood'][-1]
 
     if act_ind is None:
         act_ind = np.where(np.any(source_sim != 0, axis=1))[0]

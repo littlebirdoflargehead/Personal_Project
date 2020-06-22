@@ -2,20 +2,20 @@ from math import pi, log
 import time
 
 import numpy as np
-import scipy.sparse as sp
 
-from Cortex import cortex_loader, gain_loader
+from Cortex import cortex_loader
 from Cortex import spatial_basis_functions
+from utils import create_clusters
 
 
 class SISTBF(object):
-    def __init__(self, Cortex=None, Gain=None):
+    def __init__(self, Cortex=None):
 
         if Cortex is None:
             Cortex = cortex_loader()
 
+        self.cortex = Cortex
         self.vertconn = Cortex['VertConn']
-        self.neighbour = [self.vertconn + sp.eye(self.vertconn.shape[0])]
 
     def source_imaging(self, B, L, ratio, extent):
         seed, clusters = self.auto_cluster(B, L, extent)
@@ -107,16 +107,13 @@ class SISTBF(object):
         for iter in range(max_iter):
             # Temporal Basis Check
             if Phi.shape[0] > 0:
-                index1 = np.argwhere(np.abs(1 / c) > np.abs(1 / c).max() * prune[1]).squeeze()
-                index2 = np.argwhere(np.abs(1 / alpha) > np.abs(1 / alpha).max() * prune[0]).squeeze()
-                try:
-                    if index1.shape[0] < c.shape[0] or iter == 0:
-                        c = c[index1]
-                        keeplistTBFs = keeplistTBFs[index1]
-                        Phi = Phi[index1]
-                        K = index1.shape[0]
-                except Exception as E:
-                    print(E)
+                index1 = np.argwhere(np.abs(1 / c) > np.abs(1 / c).max() * prune[1])[:, 0]
+                index2 = np.argwhere(np.abs(1 / alpha) > np.abs(1 / alpha).max() * prune[0])[:, 0]
+                if index1.shape[0] < c.shape[0] or iter == 0:
+                    c = c[index1]
+                    keeplistTBFs = keeplistTBFs[index1]
+                    Phi = Phi[index1]
+                    K = index1.shape[0]
                 if index2.shape[0] < alpha.shape[0] or iter == 0:
                     alpha = alpha[index2]
                     keeplistSBFs = keeplistSBFs[index2]
@@ -191,9 +188,9 @@ class SISTBF(object):
             Cost.append(cost)
             if abs(MSE) < epsilon:
                 break
-            print('iter = {}, MSE = {},  #TBFs = {}, #SBFs = {}, #remaindipols = {}'.format(iter, MSE, K, len(clusters),
-                                                                                            F.shape[1]))
-            print(1 / c)
+            # print('iter = {}, MSE = {},  #TBFs = {}, #SBFs = {}, #remaindipols = {}'.format(iter, MSE, K, len(clusters),
+            #                                                                                 F.shape[1]))
+            # print(1 / c)
         t = time.time() - t
         param = dict()
         param['Phi'] = Phi
@@ -238,46 +235,6 @@ class SISTBF(object):
         return scores
 
     def create_clusters(self, scores, extent):
-        if len(self.neighbour) < extent:
-            while True:
-                self.neighbour.append(self.neighbour[-1].dot(self.neighbour[0]))
-                if len(self.neighbour) == extent:
-                    break
-        neighborhood = self.neighbour[extent - 1]
-        nSource = scores.shape[0]
-
-        indices = np.argsort(scores)[::-1]
-        # sorted_scores = scores[indices]
-
-        ii = 0
-        thresh_index = nSource
-        selected_source = np.zeros(nSource, dtype=np.int)
-        cluster_no = 1
-        seed = []
-        while ii < thresh_index:
-            node = indices[ii]
-            if selected_source[node] == 0:
-                neighbors = np.argwhere(neighborhood[node] != 0)[:, 1]
-                neighbors = neighbors[selected_source[neighbors] == 0]
-                if neighbors.shape[0] >= 5:
-                    selected_source[neighbors] = cluster_no
-                    cluster_no += 1
-                    seed.append(node)
-            ii += 1
-
-        free_nodes = indices[selected_source[indices[0:thresh_index]] == 0]
-        while free_nodes.shape[0] > 0:
-            for i in range(free_nodes.shape[0]):
-                free_node = free_nodes[0]
-                neighbors = np.argwhere(neighborhood[free_node] != 0)[:, 1]
-                neighbors = neighbors[selected_source[neighbors] != 0]
-                if neighbors.shape[0] > 0:
-                    cluster_no = np.min(selected_source[neighbors])
-                    selected_source[free_node] = cluster_no
-                    free_nodes = np.setdiff1d(free_nodes, free_node)
-
-        cellstruct = []
-        for i in range(selected_source.max()):
-            cellstruct.append(np.argwhere(selected_source == i + 1).squeeze())
+        seed, selected_source, cellstruct = create_clusters(self.cortex, scores, extent)
 
         return seed, selected_source, cellstruct

@@ -122,3 +122,44 @@ def variation_edge(vertconn):
         indices = np.hstack([indices, np.full(idx.shape[0], 1), np.full(idx.shape[0], -1)])
 
     return coo_matrix((indices, (row, col)))
+
+
+def create_clusters(Cortex, scores, extent):
+    neighborhood = Cortex['Neighborhood'][extent - 1]
+    nSource = scores.shape[0]
+
+    indices = np.argsort(scores)[::-1]
+    # sorted_scores = scores[indices]
+
+    ii = 0
+    thresh_index = nSource
+    selected_source = np.zeros(nSource, dtype=np.int)
+    cluster_no = 1
+    seed = []
+    while ii < thresh_index:
+        node = indices[ii]
+        if selected_source[node] == 0:
+            neighbors = np.argwhere(neighborhood[node] != 0)[:, 1]
+            neighbors = neighbors[selected_source[neighbors] == 0]
+            if neighbors.shape[0] >= 5:
+                selected_source[neighbors] = cluster_no
+                cluster_no += 1
+                seed.append(node)
+        ii += 1
+
+    free_nodes = indices[selected_source[indices[0:thresh_index]] == 0]
+    while free_nodes.shape[0] > 0:
+        for i in range(free_nodes.shape[0]):
+            free_node = free_nodes[0]
+            neighbors = np.argwhere(neighborhood[free_node] != 0)[:, 1]
+            neighbors = neighbors[selected_source[neighbors] != 0]
+            if neighbors.shape[0] > 0:
+                cluster_no = np.min(selected_source[neighbors])
+                selected_source[free_node] = cluster_no
+                free_nodes = np.setdiff1d(free_nodes, free_node)
+
+    cellstruct = []
+    for i in range(selected_source.max()):
+        cellstruct.append(np.argwhere(selected_source == i + 1).squeeze())
+
+    return seed, selected_source, cellstruct

@@ -38,12 +38,13 @@ def simulated_source(nSource, Patch, Basis):
     '''
     s_real = np.zeros([nSource, Basis.shape[1]])
 
+    k = Basis.shape[0]
     A = 5 * 1e-9
-    AA = A * np.eye(Basis.shape[0])
+    AA = A * np.eye(k)
     # AA = A * np.array([[1,0,0,0],[1,0,0,0],[0,1,0,0],[0,1,0,0],[2,-2,1,0]])
 
     for i in range(len(Patch)):
-        s_real[Patch[i], :] = np.matmul(AA[i, :], Basis)
+        s_real[Patch[i], :] = np.matmul(AA[np.random.permutation(k)[0], :], Basis)
 
     return s_real
 
@@ -147,10 +148,10 @@ def simulated_signal_generator(nPatches=1, extent=6e-4, nTBFs=5, basic=None,
 
     # Whiten the lead field matrix and the measure signal
     W = signal_whiten(B, stim)
-    L = np.matmul(W, gain)
-    B = np.matmul(W, B)
+    B_whiten = np.matmul(W, B)
 
     # extract TBFs from the measure signal with SVD
     TBFs, TBFs_svd = tbf_svd(B, nTBFs)
+    TBFs_whiten, TBFs_svd_whiten = tbf_svd(B_whiten, nTBFs)
     
-    return ActiveVox, s_real, ratio, B, L, W, TBFs, TBFs_svd
+    return ActiveVox, s_real, ratio, B, W, TBFs, TBFs_svd, TBFs_whiten, TBFs_svd_whiten
